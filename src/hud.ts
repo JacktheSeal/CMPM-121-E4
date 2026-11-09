@@ -32,8 +32,6 @@ export class Hud {
   }
 
   /** Builds one route stop per sector. */
-  /** Builds one route stop per sector from the HTML template. */
-  /** Builds one route stop per sector from the HTML template. */
   setRoute(names: readonly string[]): void {
     this.route.replaceChildren();
 

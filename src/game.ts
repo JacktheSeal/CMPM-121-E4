@@ -15,6 +15,7 @@ import { Rng } from "./rng.ts";
 import { loadSounds, play } from "./sounds.ts";
 import { makeTextures, TINTS } from "./textures.ts";
 import { Backdrop } from "./backdrop.ts";
+import { route } from "./route.ts";
 
 const TICK_MS = 1000 / 60;
 const START_LIVES = 3;
@@ -115,14 +116,7 @@ export class GameScene extends Phaser.Scene implements Arena {
 
     if (this.mode === "title") {
       this.hud.setMode("title");
-      this.hud.setRoute([
-        "Outer Drift",
-        "Shatter Belt",
-        "Gun Lanes",
-        "Lancer Gate",
-        "Last Approach",
-        "The Warden",
-      ]);
+      this.hud.setRoute([...route.map((sector) => sector.name), "The Warden"]);
       this.hud.setSector(-1);
       this.hud.setBoss(null);
       this.hud.say("");
@@ -376,9 +370,9 @@ export class GameScene extends Phaser.Scene implements Arena {
 
   private advanceRoute(): void {
     if (this.gameOver) return;
+
     if (this.victoryAt > 0) {
       if (this.now === this.victoryAt) {
-        // fade out, then switch modes
         this.cameras.main.fadeOut(450, 4, 2, 12);
         this.cameras.main.once("camerafadeoutcomplete", () => {
           this.scene.restart({ mode: "cutscene" });
@@ -386,32 +380,24 @@ export class GameScene extends Phaser.Scene implements Arena {
       }
       return;
     }
+
     if (this.bossDueAt > 0) {
       if (this.now === this.bossDueAt) this.startBoss();
       return;
     }
+
     if (this.boss) return;
+
     const t = this.now - this.sectorStart;
+    const sector = route[this.sector];
+
+    if (!sector) return;
+
     if (
-      this.sector === 0 && t >= 1560 && (this.enemies.length === 0 || t >= 1800)
+      t >= sector.advanceAfter &&
+      (this.enemies.length === 0 || t >= sector.length)
     ) {
-      this.startSector(1);
-    } else if (
-      this.sector === 1 && t >= 1800 && (this.enemies.length === 0 || t >= 2040)
-    ) {
-      this.startSector(2);
-    } else if (
-      this.sector === 2 && t >= 1920 && (this.enemies.length === 0 || t >= 2160)
-    ) {
-      this.startSector(3);
-    } else if (
-      this.sector === 3 && t >= 1920 && (this.enemies.length === 0 || t >= 2160)
-    ) {
-      this.startSector(4);
-    } else if (
-      this.sector === 4 && t >= 2040 && (this.enemies.length === 0 || t >= 2280)
-    ) {
-      this.startSector(5);
+      this.startSector(this.sector + 1);
     }
   }
 
@@ -419,16 +405,10 @@ export class GameScene extends Phaser.Scene implements Arena {
     this.sector = index;
     this.hud.setSector(index);
     this.sectorStart = this.now;
-    if (index === 0) {
-      this.hud.announce("Sector 1: Outer Drift", "Scouts ahead");
-    } else if (index === 1) {
-      this.hud.announce("Sector 2: Shatter Belt", "Divers incoming");
-    } else if (index === 2) {
-      this.hud.announce("Sector 3: Gun Lanes", "Turrets online");
-    } else if (index === 3) {
-      this.hud.announce("Sector 4: Lancer Gate", "Crossfire");
-    } else if (index === 4) {
-      this.hud.announce("Sector 5: Last Approach", "Everything they have");
+
+    const sector = route[index];
+    if (sector) {
+      this.hud.announce(sector.name, sector.subtitle);
     } else {
       this.hud.announce("WARNING", "The Warden approaches");
       this.hud.shudder(true);
@@ -445,13 +425,12 @@ export class GameScene extends Phaser.Scene implements Arena {
     formationSpacing: number,
     enemyType: string,
     enemyHealth: number,
-    enemySpeed: number,
+    enemyDropChance: number,
     spawnInterval: number = 0,
     spawnFromCenter: boolean = false,
     enemyDamage: number = 2,
     enemySize: number = 13,
     enemyFlag: boolean = true,
-    dropChance?: number,
     spawnY: number = -30,
     formationType: "standard" | "pincer" = "standard",
     rowSpacing: number = 50,
@@ -482,16 +461,12 @@ export class GameScene extends Phaser.Scene implements Arena {
           enemyDamage,
           enemyHealth,
           enemySize,
-          enemySpeed,
+          enemyDropChance,
           enemyFlag,
           false,
           x,
           i % 2 === 0 ? 1 : -1,
         );
-
-        if (dropChance !== undefined) {
-          enemy.dropChance = dropChance;
-        }
 
         this.enemies.push(enemy);
       }
@@ -499,457 +474,29 @@ export class GameScene extends Phaser.Scene implements Arena {
   }
   private updateProgression(): void {
     const t = this.now - this.sectorStart;
-    if (this.sector === 0) {
-      // sector 1, wave 1: four drones in a line
-      this.spawnWave(t, 4, 60, 240, 64, "drone", 100, 0.015);
+    const sector = route[this.sector];
 
-      // sector 1, wave 2: five drones in a vee
-      this.spawnWave(t, 5, 360, 168, 44, "drone", 100, 0.015, 10, true);
+    // boss phase isnt a sector
+    if (!sector) return;
 
-      // sector 1, wave 3: five drones in a vee
-      this.spawnWave(t, 5, 660, 312, 44, "drone", 100, 0.015, 10, true);
-
-      // sector 1, wave 4: six drones in a line
-      this.spawnWave(t, 6, 960, 240, 64, "drone", 100, 0.015);
-
-      // sector 1, wave 5: four drones in a column
-      this.spawnWave(t, 4, 1200, 120, 0, "drone", 100, 0.015, 24);
-
-      // sector 1, wave 6: four drones in a column
-      this.spawnWave(t, 4, 1260, 360, 0, "drone", 100, 0.015, 24);
-    } else if (this.sector === 1) {
-      // sector 2, wave 1: six drones in a vee
-      this.spawnWave(t, 6, 60, 240, 44, "drone", 100, 0.015, 10, true);
-
-      // sector 2, wave 2: four darts in a line
+    for (const wave of sector.waves) {
       this.spawnWave(
         t,
-        4,
-        300,
-        240,
-        64,
-        "dart",
-        150,
-        0.015,
-        0,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-
-      // sector 2, wave 3: five darts in a column
-      this.spawnWave(
-        t,
-        5,
-        600,
-        144,
-        0,
-        "dart",
-        150,
-        0.015,
-        24,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-
-      // sector 2, wave 4: five darts in a column
-      this.spawnWave(
-        t,
-        5,
-        720,
-        336,
-        0,
-        "dart",
-        150,
-        0.015,
-        24,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-
-      // sector 2, wave 5: seven drones in a line
-      this.spawnWave(t, 7, 1020, 240, 64, "drone", 100, 0.015);
-
-      // sector 2, wave 6: five darts in a vee
-      this.spawnWave(
-        t,
-        5,
-        1140,
-        240,
-        44,
-        "dart",
-        150,
-        0.015,
-        10,
-        true,
-        1,
-        12,
-        false,
-        0.015,
-      );
-
-      // sector 2, wave 7: six darts in a line
-      this.spawnWave(
-        t,
-        6,
-        1440,
-        240,
-        64,
-        "dart",
-        150,
-        0.015,
-        0,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-    } else if (this.sector === 2) {
-      // sector 3, wave 1: one turret in a line
-      this.spawnWave(
-        t,
-        1,
-        60,
-        240,
-        64,
-        "turret",
-        400,
-        0.3,
-        0,
-        false,
-        12,
-        19,
-        true,
-      );
-
-      // sector 3, wave 2: six drones in a vee
-      this.spawnWave(t, 6, 240, 240, 44, "drone", 100, 0.015, 10, true);
-
-      // sector 3, wave 3: two turrets in a line
-      this.spawnWave(
-        t,
-        2,
-        540,
-        240,
-        64,
-        "turret",
-        400,
-        0.3,
-        0,
-        false,
-        12,
-        19,
-        true,
-      );
-
-      // sector 3, wave 4: six darts in a column
-      this.spawnWave(
-        t,
-        6,
-        840,
-        240,
-        0,
-        "dart",
-        150,
-        0.015,
-        24,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-
-      // sector 3, wave 5: two turrets in a line
-      this.spawnWave(
-        t,
-        2,
-        1080,
-        240,
-        64,
-        "turret",
-        400,
-        0.3,
-        0,
-        false,
-        12,
-        19,
-        true,
-      );
-
-      // sector 3, wave 6: six drones in a line
-      this.spawnWave(t, 6, 1140, 240, 64, "drone", 100, 0.015);
-
-      // sector 3, wave 7: three turrets to close out the sector
-      this.spawnWave(
-        t,
-        3,
-        1500,
-        240,
-        64,
-        "turret",
-        400,
-        0.3,
-        0,
-        false,
-        12,
-        19,
-        true,
-      );
-    } else if (this.sector === 3) {
-      /* sector 4 is sector 3 but faster */
-      // sector 4, wave 1
-      this.spawnWave(
-        t,
-        4,
-        60,
-        240,
-        0,
-        "lancer",
-        250,
-        0.06,
-        30,
-        false,
-        4,
-        15,
-        true,
-        undefined,
-        70,
-        "pincer",
-        50,
-      );
-
-      // sector 4, wave 2: dart x6 (vee)
-      this.spawnWave(
-        t,
-        6,
-        360,
-        240,
-        44,
-        "dart",
-        150,
-        0.015,
-        10,
-        true,
-        1,
-        12,
-        false,
-        0.015,
-      );
-
-      // sector 4, wave 3: lancer x6 (pincer)
-      this.spawnWave(
-        t,
-        6,
-        600,
-        240,
-        0,
-        "lancer",
-        250,
-        0.06,
-        30,
-        false,
-        4,
-        15,
-        true,
-        undefined,
-        70,
-        "pincer",
-        50,
-      );
-
-      // sector 4, wave 4: turret x2 (line)
-      this.spawnWave(
-        t,
-        2,
-        780,
-        240,
-        64,
-        "turret",
-        400,
-        0.3,
-        0,
-        false,
-        12,
-        19,
-        true,
-      );
-
-      // sector 4, wave 5: lancer x6 (pincer)
-      this.spawnWave(
-        t,
-        6,
-        1140,
-        240,
-        0,
-        "lancer",
-        250,
-        0.06,
-        30,
-        false,
-        4,
-        15,
-        true,
-        undefined,
-        70,
-        "pincer",
-        50,
-      );
-
-      // sector 4, wave 6: drone x8 (vee)
-      this.spawnWave(t, 8, 1260, 240, 44, "drone", 100, 0.015, 10, true);
-
-      // sector 4, wave 7: dart x8 (line)
-      this.spawnWave(
-        t,
-        8,
-        1560,
-        240,
-        64,
-        "dart",
-        150,
-        0.015,
-        0,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-    } else if (this.sector === 4) {
-      // turret x3 (line)
-      this.spawnWave(
-        t,
-        3,
-        60,
-        240,
-        64,
-        "turret",
-        400,
-        0.3,
-        0,
-        false,
-        12,
-        19,
-        true,
-      );
-      // lancer x6 (pincer)
-      this.spawnWave(
-        t,
-        6,
-        180,
-        240,
-        0,
-        "lancer",
-        250,
-        0.06,
-        30,
-        false,
-        4,
-        15,
-        true,
-        undefined,
-        70,
-        "pincer",
-        50,
-      );
-      // dart x6 (column)
-      this.spawnWave(
-        t,
-        6,
-        540,
-        120,
-        0,
-        "dart",
-        150,
-        0.015,
-        24,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-      // dart x6 (column)
-      this.spawnWave(
-        t,
-        6,
-        540,
-        360,
-        0,
-        "dart",
-        150,
-        0.015,
-        24,
-        false,
-        1,
-        12,
-        false,
-        0.015,
-      );
-      // drone x9 (vee)
-      this.spawnWave(t, 9, 900, 240, 44, "drone", 100, 0.015, 10, true);
-      // turret x2 (line)
-      this.spawnWave(
-        t,
-        2,
-        1020,
-        240,
-        64,
-        "turret",
-        400,
-        0.3,
-        0,
-        false,
-        12,
-        19,
-        true,
-      );
-      // lancer x8 (pincer)
-      this.spawnWave(
-        t,
-        8,
-        1320,
-        240,
-        0,
-        "lancer",
-        250,
-        0.06,
-        30,
-        false,
-        4,
-        15,
-        true,
-        undefined,
-        70,
-        "pincer",
-        50,
-      );
-      // dart x8 (vee)
-      this.spawnWave(
-        t,
-        8,
-        1560,
-        240,
-        44,
-        "dart",
-        150,
-        0.015,
-        10,
-        true,
-        1,
-        12,
-        false,
-        0.015,
+        wave.enemyCount,
+        wave.waveTimer,
+        wave.xPadding,
+        wave.formationSpacing,
+        wave.enemyType,
+        wave.enemyHealth,
+        wave.enemyDropChance,
+        wave.spawnInterval,
+        wave.spawnFromCenter,
+        wave.enemyDamage,
+        wave.enemySize,
+        wave.enemyFlag,
+        wave.spawnY,
+        wave.formationType,
+        wave.rowSpacing,
       );
     }
   }
